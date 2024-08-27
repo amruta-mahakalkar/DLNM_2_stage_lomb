@@ -1,0 +1,121 @@
+# LOAD LIBRARIES 
+```{r}
+library(devtools)
+install("C:/Users/ASUS/Documents/dlnm")
+load_all("C:/Users/ASUS/Documents/dlnm")
+library(epiDisplay); library(lubridate) ; library(dplyr); library(tidyr); library(plyr)
+library(splines); library(gnm); library(Epi); library(tsModel); library(meta); library(sf) 
+library(data.table); library(viridis)
+library(mgcv) ; library(corrplot) ; library(mixmeta)
+library(ggplot2) ; library(patchwork)
+source("plot_exposure_lag.R")
+source("plot_exposure_response.R")
+```
+
+# CORRELATION ANALYSIS
+```{r}
+# Calculate the correlation table
+correlation_table <- cor(data[, .(PM25, PM10, NO2, O3, SO2, CO, Temp, RH)], method = "spearman")
+
+# Print the correlation table
+corrplot(correlation_table, method = "shade", shade.col = NA, tl.col = "black", tl.srt = 45)
+```
+
+# EXPOSURE-LAG-RESPONSE GRAPHS
+# MERGE ALL RESULTS
+```{r}
+#load results_list
+results_list_group <- readRDS("2_step_results_100k.rds")
+results_list_ur <- readRDS("2_step_urb_rur_100k.rds")
+results_bipol <- readRDS("2_step_bipol_100k.rds")
+
+# Combine the all_CA sub-groups
+combined_all_CA <- c(results_list_group$all_CA, results_bipol$all_CA)
+
+# Combine the lists
+results_list <- c(results_list_group, results_list_ur, results_bipol)
+results_list$all_CA <- NULL
+results_list$all_CA <- combined_all_CA
+```
+
+# PLOT EXP-RES GRAPHS  
+```{r}
+
+colors <- c("black","salmon2", "green4")
+groups <- c("all_CA", "urban", "rural")
+ylim <- c(0.975, 1.05)
+plot_exposure_response(results_list, "PM25", groups, colors, ylim)
+
+colors <- c("black","salmon2", "green4")
+groups <- c("all_CA", "urban", "rural")
+ylim <- c(0.975, 1.05)
+plot_exposure_response(results_list, "PM10", groups, colors, ylim)
+
+colors <- c("black","deepskyblue", "salmon")
+groups <- c("all_CA", "male", "female")
+ylim <- c(0.94, 1.04)
+plot_exposure_response(results_list, "NO2", groups, colors, ylim)
+
+colors <- c("black","deepskyblue", "salmon")
+groups <- c("all_CA", "male", "female")
+ylim <- c(0.60, 1.5)
+plot_exposure_response(results_list, "SO2", groups, colors, ylim)
+
+colors <- c("black","deepskyblue", "salmon")
+groups <- c("all_CA", "male", "female")
+ylim <- c(0.995, 1.004)
+plot_exposure_response(results_list, "CO", groups, colors, ylim)
+
+colors <- c("black","salmon2", "green4")
+groups <- c("all_CA", "urban", "rural")
+ylim <- c(0.975, 1.045)
+plot_exposure_response(results_list, "O3", groups, colors, ylim)
+```
+
+# PLOT EXP-LAG GRAPHS 
+```{r}
+
+plot_exposure_lag(results_list, c("all_CA", "male", "female", "adult", "senior"), "O3", c("all_CA" = "black", "male" = "deepskyblue", "female" = "purple3", "adult" = "darkolivegreen3", "senior" = "orange"), "age-sex")
+
+plot_exposure_lag(results_list, c("all_CA", "male", "female", "adult", "senior"), "PM25", c("all_CA" = "black", "male" = "deepskyblue", "female" = "purple3", "adult" = "darkolivegreen3", "senior" = "orange"), "age-sex")
+
+plot_exposure_lag(results_list, c("all_CA", "male", "female", "adult", "senior"), "PM10", c("all_CA" = "black", "male" = "deepskyblue", "female" = "purple3", "adult" = "darkolivegreen3", "senior" = "orange"), "age-sex")
+
+plot_exposure_lag(results_list, c("all_CA", "male", "female", "adult", "senior"), "NO2", c("all_CA" = "black", "male" = "deepskyblue", "female" = "purple3", "adult" = "darkolivegreen3", "senior" = "orange"), "age-sex")
+
+plot_exposure_lag(results_list, c("all_CA", "male", "female", "adult", "senior"), "SO2", c("all_CA" = "black", "male" = "deepskyblue", "female" = "purple3", "adult" = "darkolivegreen3", "senior" = "orange"), "age-sex")
+
+plot_exposure_lag(results_list, c("all_CA", "male", "female", "adult", "senior"), "CO", c("all_CA" = "black", "male" = "deepskyblue", "female" = "purple3", "adult" = "darkolivegreen3", "senior" = "orange"), "age-sex")
+
+plot_exposure_lag(results_list, c("all_CA", "urban", "rural"), "O3", c("all_CA" = "black", "urban" = "salmon2", "rural" = "darkolivegreen3"), "location")
+plot_exposure_lag(results_list, c("all_CA", "urban", "rural"), "NO2", c("all_CA" = "black", "urban" = "salmon2", "rural" = "darkolivegreen3"), "location")
+plot_exposure_lag(results_list, c("all_CA", "urban", "rural"), "PM25", c("all_CA" = "black", "urban" = "salmon2", "rural" = "darkolivegreen3"), "location")
+plot_exposure_lag(results_list, c("all_CA", "urban", "rural"), "PM10", c("all_CA" = "black", "urban" = "salmon2", "rural" = "darkolivegreen3"), "location")
+
+```
+
+```{r}
+PM25 <- results_list$all_CA$PM25$results_lag
+PM25_O3 <- results_bipol$all_CA$PM25_O3$results_lag
+PM25_NO2 <- results_bipol$all_CA$PM25_NO2$results_lag
+PM25_SO2 <- results_bipol$all_CA$PM25_SO2$results_lag
+PM25_CO <- results_bipol$all_CA$PM25_CO$results_lag
+result_bipol <- bind_rows(PM25, PM25_O3, PM25_NO2, PM25_SO2, PM25_CO)
+
+p <- ggplot(result_bipol, aes(x = lag, y = RR, color = pollutant)) +
+    geom_point(position = position_dodge(width = 0.5), size = 0.85) +
+    geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.3, position = position_dodge(width = 0.5)) +
+    geom_hline(yintercept = 1, color = "black", linetype = "dotted") +
+    labs(title = "Exposure-lag between all_CA and PM2.5 adjusted with other pollutants", x = "Lag", y = "RR") +
+    scale_x_continuous(breaks = unique(result_bipol$lag)) +
+    theme_minimal() + 
+    theme(panel.grid.major.x = element_line(color = "grey90"),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.major.y = element_line(color = "grey90"),  
+          panel.grid.minor.y = element_line(color = "grey90"))
+
+print(p)
+```
+
+
+
