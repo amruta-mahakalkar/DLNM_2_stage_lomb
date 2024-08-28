@@ -12,7 +12,7 @@ library(ggplot2) ; library(patchwork)
 ```
 
 ```{r}
-#load regional file
+#load 100k dist file
 data_dist <- read.csv('CAMS_CA_100k_v1.csv')
 data_dist <- as.data.table(data_dist)
 ```
@@ -53,19 +53,19 @@ fqaic_single <- function(model) {
 fun <- c("ns") 
 df <- 3:10
 inputs <- c("all_CA", "senior", "adult", "male", "female")
-# Initialize an empty list to store the basis functions
+# make storages
 spydoy_qaic <- list()
 spydoy_rmse <- list()
 # Loop through each combination of fun and df
 for (input in inputs) {
   for (f in fun) {
     for (d in df) {
-      # Create the name
+      # make the name
       name <- paste0("spldoy_", input, "_", d)
       
       data_dist[, keep := sum(get(input)) > 0, by = stratum]
       
-      # Create the basis function
+      # make the basis function
       spldoy <- onebasis(data_dist$doy, fun = f, df = d)
   
       model <- gnm(as.formula(paste(input, "~ spldoy")), eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
@@ -73,6 +73,7 @@ for (input in inputs) {
       # get their Q-AIC
       fqaic <- fqaic_single(model)
       rmse <- sqrt(mean(model$residuals^2))
+      
       # Store the qaic values in a list 
       spydoy_qaic[[name]] <- fqaic
       spydoy_rmse[[name]] <- rmse
@@ -83,7 +84,7 @@ write.csv(spydoy_qaic, "spydoy_qaic.csv", row.names =TRUE)
 ```
 
 
-# QAIC for argvar (fun, df) for meteo 
+# QAIC for argvar (fun, df) for temperature and RH
 ```{r}
 # Define the parameters
 knots_argvar <- list(c(10, 90)/100, c(25, 75)/100, c(10, 75, 90)/100, c(25, 75, 90)/100, c(33.33, 66.67)/100)
@@ -91,12 +92,13 @@ lags_temp <- c(0,14)
 df_arg <- 3:6
 vars <- c("Temp", "RH") 
 
-# Initialize an empty list to store the Q-AIC values
+# make storage
 argvar_dfs_qaic <- list()
 for (var in vars) {
   # Loop through each combination
   argvar_dfs_qaic[[var]] <- list()
-  # Create a linear crossbasis object
+  
+  # try linear argvar
   cb_lin <- onebasis(data_dist[[var]], fun = "lin")
     
   # Fit the linear model
@@ -106,6 +108,7 @@ for (var in vars) {
   fqaic_lin <- fqaic_single(model_lin)
   argvar_dfs_qaic[[var]][[paste0("qaic_", "lin")]] <- fqaic_lin 
     
+  # try non-linear argvar with dfs 
     for (df_var in df_arg) {
       cb_df <- onebasis(data_dist[[var]], fun = "ns", df = df_var)
       
@@ -116,7 +119,8 @@ for (var in vars) {
       
       # Store the Q-AIC value for the current df model
       argvar_dfs_qaic[[var]][[paste0("qaic_", "ns", df_var)]] <- fqaic_df
-      }
+    }
+    # try non-linear argvar with dfs + specific knots 
     for (df_var in df_arg) {      
       for (knot in knots_argvar) {
         cb_knot <- onebasis(data_dist[[var]], fun = "ns", knots=quantile(data_dist[[var]], knot, na.rm=T), df = df_var)
@@ -138,12 +142,12 @@ for (var in vars) {
 fun_arglag <- c("ns", "bs", "strata")
 df_arglag <- 3:6
 vars <- c("PM25", "PM10", "NO2", "O3", "SO2", "CO", "Temp", "RH")
-# Initialize an empty list to store the Q-AIC values
+# make storage
 arglag_dfs_qaic <- list()
 for (var in vars) {
   # Loop through each combination
   arglag_dfs_qaic[[var]] <- list()
-  # Create a linear crossbasis object
+  # try linear varlag
   cb_lin <- crossbasis(data_dist[[var]], lag = 7, argvar = list(fun = "ns", df = 3), arglag = list(fun = "lin"))
     
   # Fit the linear model
@@ -153,7 +157,7 @@ for (var in vars) {
   fqaic_lin <- fqaic_single(model_lin)
   arglag_dfs_qaic[[var]][[paste0("qaic_", "lin")]] <- fqaic_lin 
   
-  # Create a strata crossbasis object
+  # try strata varlag
   cb_stra <- crossbasis(data_dist[[var]], lag = 7, argvar = list(fun = "ns", df = 3), arglag = list(fun = "strata", breaks=1))
     
   # Fit the strata model
@@ -162,7 +166,8 @@ for (var in vars) {
   # Calculate the Q-AIC for the strata
   fqaic_stra <- fqaic_single(model_stra)
   arglag_dfs_qaic[[var]][[paste0("qaic_", "stra")]] <- fqaic_stra
-
+  
+  # try non-linear varlag with functions + dfs
   for (fun_lag in fun_arglag) {
     for (df_lag in df_arglag) {
       cb_df <- crossbasis(data_dist[[var]], lag = 7, argvar = list(fun = "ns", df = 3),arglag = list(fun = fun_lag, df = df_lag))
@@ -172,14 +177,14 @@ for (var in vars) {
       
     fqaic_df <- fqaic_single(model_df)
       
-    # Store the Q-AIC value for the current df model
+    # store qaic
     arglag_dfs_qaic[[var]][[paste0("qaic_", fun_lag, df_lag)]] <- fqaic_df
     }
   }
 }
 ```
 
-# QAIC for lag per meteo
+# QAIC for arglag for temp 
 ```{r}
 vars <- c("Temp")
 lags <- 1:14
@@ -192,22 +197,26 @@ spldoy <- onebasis(data_dist$doy, "ns", df=3)
 
 for (var in vars) {
   var_lag_qaic[[var]] <- list()
+  # use best argvar from earlier analysis
   argvar = list(fun = "ns", knots = quantile(data_dist[[var]], knot_var[[var]], na.rm=TRUE), df = 3)
+  # try varlag with lags, function and knots 
   for (lag in lags) {
     for (f in fun){
       for (k in knot_lag){
-      cb_lag_break <- crossbasis(data_dist[[var]], lag = lag, argvar = argvar, arglag = list(fun = "strata", breaks = 1))
-      cb_lag_knots <- crossbasis(data_dist[[var]], lag = lag, argvar = argvar, arglag = list(knots=logknots(lag, fun = f, k)))
-  
-      # Fit the linear model for cb_lag_break
-      model_lag_break <- gnm(all_CA ~ cb_lag_break + spldoy:factor(year) + factor(dow), eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
-      fqaic_lag_break <- fqaic_single(model_lag_break)
-      var_lag_qaic[[var]][[paste0("qaic_break_", lag)]] <- fqaic_lag_break
-      
-      # Fit the linear model for cb_lag_knots
-      model_lag_knots <- gnm(all_CA ~ cb_lag_knots + spldoy:factor(year) + factor(dow), eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
-      fqaic_lag_knots <- fqaic_single(model_lag_knots)
-      var_lag_qaic[[var]][[paste0("qaic_knots_", lag, "_", f, "_", k)]] <- fqaic_lag_knots
+        # try strata with breaks = 1
+        cb_lag_break <- crossbasis(data_dist[[var]], lag = lag, argvar = argvar, arglag = list(fun = "strata", breaks = 1))
+        # trying other combinations
+        cb_lag_knots <- crossbasis(data_dist[[var]], lag = lag, argvar = argvar, arglag = list(knots=logknots(lag, fun = f, k)))
+    
+        # Fit the linear model for cb_lag_break
+        model_lag_break <- gnm(all_CA ~ cb_lag_break + spldoy:factor(year) + factor(dow), eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
+        fqaic_lag_break <- fqaic_single(model_lag_break)
+        var_lag_qaic[[var]][[paste0("qaic_break_", lag)]] <- fqaic_lag_break
+        
+        # Fit the linear model for cb_lag_knots
+        model_lag_knots <- gnm(all_CA ~ cb_lag_knots + spldoy:factor(year) + factor(dow), eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
+        fqaic_lag_knots <- fqaic_single(model_lag_knots)
+        var_lag_qaic[[var]][[paste0("qaic_knots_", lag, "_", f, "_", k)]] <- fqaic_lag_knots
       }
     }
   }
@@ -221,7 +230,7 @@ write.csv(unlisted_arglag, "arglag_v2.csv", row.names = TRUE)
 ```
 
 
-# SAVE LAG, ARGLAG AND ARGVAR IN CSV
+# Save argvar (for temp and rh), arglag for temp and pollutants
 ```{r}
 # Unlist the lists
 unlisted_arglag <- unlist(arglag_dfs_qaic)
