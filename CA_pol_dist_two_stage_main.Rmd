@@ -56,14 +56,15 @@ data[, stratum:=factor(paste(DISTRICT, year, month, dow, sep=":"))]
 districts <- unique(data$DISTRICT)
 lags <- 0:7
 argvar <- list(fun = "lin")
-arglag <- list(fun = "ns", df=3)
-pollutants <- c("NO2", "PM25", "PM10", "O3", "SO2", "CO") 
-inputs <- c("all_CA", "senior", "adult", "male", "female") 
+arglag <- list(knots=logknots(7, 2)) 
 
-# make storage lists
+pollutants <- c("PM25", "PM10", "NO2", "O3", "SO2", "CO") 
+inputs <- c("all_CA", "senior", "adult", "male", "female")  
+
+# Initialize a nested list to store results
 results_list <- list()
 all_results_lag <- data.frame()
-# Looping
+# Process through multiple loops
 for (input in inputs) {
   print(paste("Processing input:", input))
   results_list[[input]] <- list()
@@ -72,19 +73,16 @@ for (input in inputs) {
     coef_vcov_list <- list()
     results_lag <- data.frame()
     for (dist in districts)  {
-      # filter the district of interest 
       data_sub <- data[data$DISTRICT == dist, ]
-      # filter out null stratum
       data_sub[, keep := sum(get(input)) > 0, by = stratum]
       # accounting for long-term trend
       spldoy <- onebasis(data_sub$doy, "ns", df=3) 
-      # design confounders
+      # adjusting for confounders 
       cb_temp <- crossbasis(data_sub$Temp, lag=14, argvar=list(fun="ns", knots=quantile(data_sub$Temp, c(0.10,0.75,0.90), na.rm=T), df=3), arglag=list(fun='strata', breaks=1) , group = data_sub$year) 
       cb_rh <- onebasis(data_sub$RH, "ns", df=4)
-      
-      # crossbasis for exposure response model 
+      # crossbasis for exposure and lag - response model 
       cb_pol_var <- crossbasis(data_sub[[pollutant]], lag = 4, argvar = argvar, arglag = arglag, group = data_sub$year) 
-      # crossbasis for lag -response model 
+      
       cb_pol_lag <- crossbasis(data_sub[[pollutant]], lag = 7, argvar = argvar, arglag = arglag, group = data_sub$year)
       
       # run exposure and lag - response models 
@@ -96,21 +94,21 @@ for (input in inputs) {
       coef_vcov_list[[dist]] <- list()
       df_pol <- 3
       ind <- seq(df_pol)
-      coefall <- coef(model_var)[ind] * 10 # refer https://github.com/gasparrini/Extended2stage/blob/main/addcode/00.prepdata.R#L159
-      
-      vcovall <- vcov(model_var)[ind,ind] * 10
+      coefall <- coef(model_var)[ind]  
+      vcovall <- vcov(model_var)[ind,ind] 
       coef_vcov_list[[dist]]$coefall <- coefall
       coef_vcov_list[[dist]]$vcovall <- vcovall
       
       # record lag-wise estimates 
-      for (lag in lags) {
-        # crossreduce model by lag 
-        mod_pred_red <- crossreduce(cb_pol_lag, model_lag, type="lag", value = lag, cen=0) 
-        # extract estimates
-        coeflag <- coef(mod_pred_red) 
-        vcovlag <- vcov(mod_pred_red) 
-        coef_vcov_list[[dist]]$lags[[paste0("lag_", lag)]] <- list(coeflag = coeflag, vcovlag = vcovlag)
-      }
+      # crossreduce model by lag 
+      mod_pred_red <- crossreduce(cb_pol_lag, model_lag, type="var", value = 10, cen=0) 
+
+      # extract estimates
+      coeflag <- coef(mod_pred_red)
+      vcovlag <- vcov(mod_pred_red)
+      coef_vcov_list[[dist]]$coeflag <- coeflag
+      coef_vcov_list[[dist]]$vcovlag <- vcovlag
+      
     }
     # attach district numbers to the dataframe
     names(coef_vcov_list) <- districts
@@ -126,35 +124,35 @@ for (input in inputs) {
     meta_pred_tot <- crosspred(do.call(onebasis, c(list(x=0:max_pol), list(fun="ns", df=3))), coef=coef(meta_tot), vcov=vcov(meta_tot), cen=0, model.link="log")
     
     # Store overall meta-analysis results in a list
-    results_list[[input]][[pollutant]] <- list(results_lag = results_lag, meta_pred_tot = meta_pred_tot, meta_tot = meta_tot)
+    results_list[[input]][[pollutant]]$meta_tot <- meta_tot
+    results_list[[input]][[pollutant]]$meta_pred_tot <- meta_pred_tot
     
     # Run lag-wise meta-analysis 
-    for (lag in lags) {
-      coeflag <- do.call(rbind, lapply(coef_vcov_list, function(x) x$lags[[paste0("lag_", lag)]]$coeflag))
-      vcovlag <- lapply(coef_vcov_list, function(x) x$lags[[paste0("lag_", lag)]]$vcovlag)
+    coeflag <- do.call(rbind, lapply(coef_vcov_list, function(x) x$coeflag))
+    vcovlag <- lapply(coef_vcov_list, function(x) x$vcovlag)
+    meta_lag <- mixmeta(coeflag, vcovlag, random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
       
-      meta_lag <- mixmeta(coeflag, vcovlag, random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
-
-      # extract lag-wise results
+    # do prediction of meta lag
+    meta_pred_lag <- crosspred(do.call(onebasis, c(list(x=seq(0,7)), attr(cb_pol_lag,"arglag"))), coef=coef(meta_lag), vcov=vcov(meta_lag), model.link="log", at=0:7)
+    
+    # record and store effects
+    for (lag in 0:7) {
       effect <- data.frame(
         input = input,
         pollutant = pollutant,
         lag = lag,
-        RR=exp(summary(meta_lag)$coefficients[,1]*10),
-        ci_low=exp(confint(meta_lag)[,1]*10),
-        ci_high=exp(confint(meta_lag)[,2]*10) #*10
+        RR = meta_pred_lag$matRRfit[lag + 1],
+        ci_low = meta_pred_lag$matRRlow[lag + 1],
+        ci_high = meta_pred_lag$matRRhigh[lag + 1]
       )
-      
       # Save individual results
       results_lag <- rbind(results_lag, effect)
     }
-    # save both meta_tot and meta_lag in a list 
     results_list[[input]][[pollutant]]$results_lag <- results_lag
     results_list[[input]][[pollutant]]$meta_lag <- meta_lag
-    
-    # Append results_lag to all_results_lag
+    results_list[[input]][[pollutant]]$meta_pred_lag <- meta_pred_lag
     all_results_lag <- rbind(all_results_lag, results_lag)
-  }
+    }
 }
 # Save results_list to an RDS file
 saveRDS(results_list, file = "2_step_results_100k.rds")
@@ -166,13 +164,12 @@ write.csv(all_results_lag, file = "2_step_results_100k.csv", row.names = FALSE)
 
 # CHECK HETEROGENEITY STATS 
 ```{r}
-#
 summary(results_list$all_CA$PM25$meta_tot)
 summary(results_list$all_CA$PM10$meta_tot)
 summary(results_list$all_CA$NO2$meta_tot)
 summary(results_list$all_CA$O3$meta_tot)
 summary(results_list$all_CA$SO2$meta_tot)
-summary(results_list$adult$NO2$meta_tot)
+summary(results_list$all_CA$CO$meta_tot)
 ```
 
 
