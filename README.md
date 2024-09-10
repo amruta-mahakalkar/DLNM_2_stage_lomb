@@ -23,8 +23,9 @@ Geolocalised points of telephone calls to the regional emergency medical service
 2. Graphs and maps : outputs as district-wise relative risk maps, regional exposure-response curves and regional lag-response graphs
 3. Results: excel consisting relative risk (ci:95%) (for entire region) for overall model, stratified by urban-rural, modified by age and sex and bi-pollutant. 
 4. Parametres_selection.Rmd : Selections of model parameters such as degrees of freedom, lag and spline function of temperature, relative humidity and pollutants.
-5. Model: contains R codes for 
+5. Models and other: contains R codes for 
    * Main model
    * Model modification by age-sex
    * Model stratification by urban-rural
-   * Bi-pollutant model 
+   * Bi-pollutant model
+   * Codes for plotting 
