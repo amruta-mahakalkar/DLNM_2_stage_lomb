@@ -1,7 +1,7 @@
 # Short-term effect of air pollution on OHCA in Lombardia – a case-crossover study
 It is time-stratified case-crossover study to analyse the association between short-term exposure to air pollution and Out-of-Hospital-Cardiac-Arrests (OHCA) between 2016 and 2019 in the region of Lombardia, Italy. 
 The main model consists of two-stages of multi-scaler risk assessment:
-### Stage 1:
+## Stage 1:
 Estimating OHCA risk for 96 districts (of approximately 100k population) using a distributed lag non-linear model (DLNM) with individual air pollutant as exposure factor, and temperature and relative humidity as confounders. Long-term trends and seasonality are controlled for using a natural cubic spline of time. 
 ## Stage 2:
 Estimates from ditricts are pooled in to calculate the effect for the entire region using random-effect meta-analysis.
