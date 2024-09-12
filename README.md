@@ -5,7 +5,7 @@ The main model consists of two-stages of multi-scaler risk assessment:
 Estimating OHCA risk for 96 districts (of approximately 100k population) using a [distributed lag non-linear model](https://github.com/gasparrini/dlnm) (DLNM) with individual air pollutant as exposure factor, and temperature and relative humidity as confounders. Long-term trends and seasonality are controlled for using a natural cubic spline of time. 
 ### Stage 2
 Estimates from districts are pooled in to calculate the effect for the entire region using random-effect meta-analysis.
-< br / > 
+
 Outputs are produced as:
 * Exposure-response function illustrating changing risk over increasing exposure to the pollutant,
 * Lag-response function illustrating changing risk per 10 unit increase in the pollutant exposure between lag 0 (event day) and lag 7.
