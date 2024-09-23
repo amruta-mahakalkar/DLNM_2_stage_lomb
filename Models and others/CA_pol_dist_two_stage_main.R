@@ -1,6 +1,4 @@
 # IMPORT LIBRARIES
-
-
 library(devtools)
 install("C:/Users/ASUS/Documents/dlnm")
 load_all("C:/Users/ASUS/Documents/dlnm")
@@ -11,13 +9,10 @@ library(mgcv) ; library(corrplot) ; library(mixmeta)
 library(ggplot2) ; library(patchwork)
 
 
-
 # 100K CA_CAMS AND PRE-PROCESS 
-
 #load regional file
 data <- read.csv('CAMS_CA_100k_v1.csv')  
 data <- as.data.table(data)
-
 
 
 # Define the public holidays in Milan
@@ -45,7 +40,6 @@ data[, adult := adult + young]
 data$holidays <- as.integer(data$Date %in% as.Date(milan_holidays))
 # define stratum
 data[, stratum:=factor(paste(DISTRICT, year, month, dow, sep=":"))]
-
 
 
 # 2-STAGE MODEL WITH DISTRICT STRATIFICATION AND META-ANALYSIS
@@ -80,7 +74,6 @@ for (input in inputs) {
       cb_rh <- onebasis(data_sub$RH, "ns", df=4)
       # crossbasis for exposure and lag - response model 
       cb_pol_var <- crossbasis(data_sub[[pollutant]], lag = 4, argvar = argvar, arglag = arglag, group = data_sub$year) 
-      
       cb_pol_lag <- crossbasis(data_sub[[pollutant]], lag = 7, argvar = argvar, arglag = arglag, group = data_sub$year)
       
       # run exposure and lag - response models 
@@ -88,9 +81,8 @@ for (input in inputs) {
         model_var <- gnm(as.formula(paste(input, "~ cb_pol_var + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)")), eliminate=stratum, data=data_sub, family=quasipoisson, subset=keep)
         model_lag <- gnm(as.formula(paste(input, "~ cb_pol_lag + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)")), eliminate=stratum, data=data_sub, family=quasipoisson, subset=keep)
       } else {
-      model_var <- gnm(as.formula(paste(input, "~ cb_pol_var + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)+ factor(holidays)")), eliminate = stratum, data = data_sub, family = quasipoisson, subset=keep) 
-    
-      model_lag <- gnm(as.formula(paste(input, "~ cb_pol_lag + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)+ factor(holidays)")), eliminate = stratum, data = data_sub, family = quasipoisson, subset=keep)
+        model_var <- gnm(as.formula(paste(input, "~ cb_pol_var + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)+ factor(holidays)")), eliminate = stratum, data = data_sub, family = quasipoisson, subset=keep) 
+        model_lag <- gnm(as.formula(paste(input, "~ cb_pol_lag + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)+ factor(holidays)")), eliminate = stratum, data = data_sub, family = quasipoisson, subset=keep)
       }
       
       # record overall estimates
@@ -105,7 +97,7 @@ for (input in inputs) {
       # record lag-wise estimates 
       # crossreduce model by lag 
       mod_pred_red <- crossreduce(cb_pol_lag, model_lag, type="var", value = 10, cen=0) 
-
+      
       # extract estimates
       coeflag <- coef(mod_pred_red)
       vcovlag <- vcov(mod_pred_red)
@@ -121,7 +113,7 @@ for (input in inputs) {
     
     # Run overall meta-analysis 
     meta_tot <- mixmeta(coefall, vcovall , method="ml", random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
-
+    
     # Predict coef and vcov from overall meta-analysis
     max_pol <- ceiling(max(data[[pollutant]], na.rm = TRUE) / 5) * 5
     meta_pred_tot <- crosspred(do.call(onebasis, c(list(x=0:max_pol), list(fun="ns", df=3))), coef=coef(meta_tot), vcov=vcov(meta_tot), cen=0, model.link="log")
@@ -134,7 +126,7 @@ for (input in inputs) {
     coeflag <- do.call(rbind, lapply(coef_vcov_list, function(x) x$coeflag))
     vcovlag <- lapply(coef_vcov_list, function(x) x$vcovlag)
     meta_lag <- mixmeta(coeflag, vcovlag, method="ml" , random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
-      
+    
     # do prediction of meta lag
     meta_pred_lag <- crosspred(do.call(onebasis, c(list(x=seq(0,7)), attr(cb_pol_lag,"arglag"))), coef=coef(meta_lag), vcov=vcov(meta_lag), model.link="log", at=0:7)
     
@@ -162,14 +154,13 @@ for (input in inputs) {
     results_list[[input]][[pollutant]]$meta_lag <- meta_lag
     results_list[[input]][[pollutant]]$meta_pred_lag <- meta_pred_lag
     all_results_lag <- rbind(all_results_lag, results_lag)
-    }
+  }
 }
 # Save results_list to an RDS file
 saveRDS(results_list, file = "2_step_results_100k.rds")
 
 # Save all_results_lag to a CSV file
 write.csv(all_results_lag, file = "2_step_results_100k.csv", row.names = FALSE)
-
 
 
 # CHECK HETEROGENEITY STATS 
