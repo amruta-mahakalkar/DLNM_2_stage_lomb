@@ -22,7 +22,7 @@ for (input in inputs) {
     coef_vcov_list <- list()
     results_lag <- data.frame()
     for (dist in districts)  {
-      data_sub <- data[data$DISTRICT == dist, ]
+      data_sub <- data_input[data_input$DISTRICT == dist, ]
       data_sub[, keep := sum(get(input)) > 0, by = stratum]
       # accounting for long-term trend
       spldoy <- onebasis(data_sub$doy, "ns", df=3) 
@@ -57,7 +57,6 @@ for (input in inputs) {
       vcovlag <- vcov(mod_pred_red)
       coef_vcov_list[[dist]]$coeflag <- coeflag
       coef_vcov_list[[dist]]$vcovlag <- vcovlag
-      
     }
     # attach district numbers to the dataframe
     names(coef_vcov_list) <- districts
@@ -66,7 +65,7 @@ for (input in inputs) {
     vcovall <- lapply(coef_vcov_list, function(x) x$vcovall)
     
     # Run overall meta-analysis 
-    meta_tot <- mixmeta(coefall, vcovall, random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
+    meta_tot <- mixmeta(coefall, vcovall, method="ml", random=~1|names(coef_vcov_list), control=list(igls.inititer=10)) 
 
     # Predict coef and vcov from overall meta-analysis
     max_pol <- ceiling(max(data[[pollutant]], na.rm = TRUE) / 5) * 5
@@ -79,20 +78,27 @@ for (input in inputs) {
     # Run lag-wise meta-analysis 
     coeflag <- do.call(rbind, lapply(coef_vcov_list, function(x) x$coeflag))
     vcovlag <- lapply(coef_vcov_list, function(x) x$vcovlag)
-    meta_lag <- mixmeta(coeflag, vcovlag, random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
+    meta_lag <- mixmeta(coeflag, vcovlag, method="ml", random=~1|names(coef_vcov_list), control=list(igls.inititer=10)) #method="ml" added
       
     # do pred of meta lag
     meta_pred_lag <- crosspred(do.call(onebasis, c(list(x=seq(0,7)), attr(cb_pol_lag,"arglag"))), coef=coef(meta_lag), vcov=vcov(meta_lag), model.link="log", at=0:7)
     
     # record and store effects
     for (lag in 0:7) {
+      RR <- meta_pred_lag$matRRfit[lag + 1]
+      ci_low <- meta_pred_lag$matRRlow[lag + 1]
+      ci_high <- meta_pred_lag$matRRhigh[lag + 1]
+      SE <- (log(ci_high) - log(ci_low)) / (2 * 1.96)
+      Z <- log(RR) / SE
+      pvalue <- 2 * (1 - pnorm(abs(Z)))
       effect <- data.frame(
         input = input,
         pollutant = pollutant,
         lag = lag,
-        RR = meta_pred_lag$matRRfit[lag + 1],
-        ci_low = meta_pred_lag$matRRlow[lag + 1],
-        ci_high = meta_pred_lag$matRRhigh[lag + 1]
+        RR = RR,
+        ci_low = ci_low,
+        ci_high = ci_high,
+        pvalue = pvalue
       )
       # Save individual results
       results_lag <- rbind(results_lag, effect)

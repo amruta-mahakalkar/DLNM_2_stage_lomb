@@ -75,7 +75,9 @@ for (input in inputs) {
       RR <- prediction$matRRfit[lag + 1]
       ci_low <- prediction$matRRlow[lag + 1]
       ci_high <- prediction$matRRhigh[lag + 1]
-    
+      SE <- (log(ci_high) - log(ci_low)) / (2 * 1.96)
+      Z <- log(RR) / SE
+      pvalue <- 2 * (1 - pnorm(abs(Z)))
     # Append the results to the data frame
       l_results <- rbind(l_results, data.frame(
          input = input,
@@ -84,6 +86,7 @@ for (input in inputs) {
          RR = RR,
          ci_low = ci_low,
          ci_high = ci_high,
+         pvalue = pvalue,
          stringsAsFactors = FALSE
        ))
     }

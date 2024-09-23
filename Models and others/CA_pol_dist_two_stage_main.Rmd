@@ -22,10 +22,10 @@ data <- as.data.table(data)
 ```{r}
 # Define the public holidays in Milan
 milan_holidays <- c(
-  "2016-01-01", "2016-01-06", "2016-03-28", "2016-04-25", "2016-05-01", "2016-06-02", "2016-08-15", "2016-11-01", "2016-12-08", "2016-12-25", "2016-12-26", "2016-12-07",
-  "2017-01-01", "2017-01-06", "2017-04-17", "2017-04-25", "2017-05-01", "2017-06-02", "2017-08-15", "2017-11-01", "2017-12-08", "2017-12-25", "2017-12-26", "2017-12-07",
-  "2018-01-01", "2018-01-06", "2018-04-02", "2018-04-25", "2018-05-01", "2018-06-02", "2018-08-15", "2018-11-01", "2018-12-08", "2018-12-25", "2018-12-26", "2018-12-07",
-  "2019-01-01", "2019-01-06", "2019-04-22", "2019-04-25", "2019-05-01", "2019-06-02", "2019-08-15", "2019-11-01", "2019-12-08", "2019-12-25", "2019-12-26", "2019-12-07"
+  "2016-01-01", "2016-01-06", "2016-03-28", "2016-04-25", "2016-06-02", "2016-08-15", "2016-11-01", "2016-12-08", "2016-12-26",
+  "2017-01-06", "2017-04-17", "2017-04-25", "2017-05-01", "2017-06-02", "2017-08-15", "2017-11-01", "2017-12-08", "2017-12-25", "2017-12-26",
+  "2018-01-01", "2018-04-02", "2018-04-25", "2018-05-01", "2018-08-15", "2018-11-01", "2018-12-25", "2018-12-26",
+  "2019-01-01", "2019-04-22", "2019-04-25", "2019-05-01", "2019-08-15", "2019-11-01", "2019-12-25", "2019-12-26"
 )
 ```
 
@@ -86,9 +86,14 @@ for (input in inputs) {
       cb_pol_lag <- crossbasis(data_sub[[pollutant]], lag = 7, argvar = argvar, arglag = arglag, group = data_sub$year)
       
       # run exposure and lag - response models 
-      model_var <- gnm(as.formula(paste(input, "~ cb_pol_var + spldoy:factor(year) + cb_temp + cb_rh + factor(dow) + factor(holidays)")), eliminate = stratum, data = data_sub, family = quasipoisson, subset=keep)
-      
-      model_lag <- gnm(as.formula(paste(input, "~ cb_pol_lag + spldoy:factor(year) + cb_temp + cb_rh + factor(dow) + factor(holidays)")), eliminate = stratum, data = data_sub, family = quasipoisson, subset=keep)
+      if (input == "adult") {
+        model_var <- gnm(as.formula(paste(input, "~ cb_pol_var + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)")), eliminate=stratum, data=data_sub, family=quasipoisson, subset=keep)
+        model_lag <- gnm(as.formula(paste(input, "~ cb_pol_lag + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)")), eliminate=stratum, data=data_sub, family=quasipoisson, subset=keep)
+      } else {
+      model_var <- gnm(as.formula(paste(input, "~ cb_pol_var + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)+ factor(holidays)")), eliminate = stratum, data = data_sub, family = quasipoisson, subset=keep) 
+    
+      model_lag <- gnm(as.formula(paste(input, "~ cb_pol_lag + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)+ factor(holidays)")), eliminate = stratum, data = data_sub, family = quasipoisson, subset=keep)
+      }
       
       # record overall estimates
       coef_vcov_list[[dist]] <- list()
@@ -117,7 +122,7 @@ for (input in inputs) {
     vcovall <- lapply(coef_vcov_list, function(x) x$vcovall)
     
     # Run overall meta-analysis 
-    meta_tot <- mixmeta(coefall, vcovall, random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
+    meta_tot <- mixmeta(coefall, vcovall , method="ml", random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
 
     # Predict coef and vcov from overall meta-analysis
     max_pol <- ceiling(max(data[[pollutant]], na.rm = TRUE) / 5) * 5
@@ -130,20 +135,27 @@ for (input in inputs) {
     # Run lag-wise meta-analysis 
     coeflag <- do.call(rbind, lapply(coef_vcov_list, function(x) x$coeflag))
     vcovlag <- lapply(coef_vcov_list, function(x) x$vcovlag)
-    meta_lag <- mixmeta(coeflag, vcovlag, random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
+    meta_lag <- mixmeta(coeflag, vcovlag, method="ml" , random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
       
     # do prediction of meta lag
     meta_pred_lag <- crosspred(do.call(onebasis, c(list(x=seq(0,7)), attr(cb_pol_lag,"arglag"))), coef=coef(meta_lag), vcov=vcov(meta_lag), model.link="log", at=0:7)
     
     # record and store effects
     for (lag in 0:7) {
+      RR <- meta_pred_lag$matRRfit[lag + 1]
+      ci_low <- meta_pred_lag$matRRlow[lag + 1]
+      ci_high <- meta_pred_lag$matRRhigh[lag + 1]
+      SE <- (log(ci_high) - log(ci_low)) / (2 * 1.96)
+      Z <- log(RR) / SE
+      pvalue <- 2 * (1 - pnorm(abs(Z)))
       effect <- data.frame(
         input = input,
         pollutant = pollutant,
         lag = lag,
-        RR = meta_pred_lag$matRRfit[lag + 1],
-        ci_low = meta_pred_lag$matRRlow[lag + 1],
-        ci_high = meta_pred_lag$matRRhigh[lag + 1]
+        RR = RR,
+        ci_low = ci_low,
+        ci_high = ci_high,
+        pvalue = pvalue
       )
       # Save individual results
       results_lag <- rbind(results_lag, effect)
