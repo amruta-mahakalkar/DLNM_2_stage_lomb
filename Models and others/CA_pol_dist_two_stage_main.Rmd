@@ -1,6 +1,6 @@
 # IMPORT LIBRARIES
 
-```{r}
+
 library(devtools)
 install("C:/Users/ASUS/Documents/dlnm")
 load_all("C:/Users/ASUS/Documents/dlnm")
@@ -9,17 +9,17 @@ library(splines); library(gnm); library(Epi); library(tsModel); library(meta); l
 library(data.table); library(viridis)
 library(mgcv) ; library(corrplot) ; library(mixmeta)
 library(ggplot2) ; library(patchwork)
-```
+
 
 
 # 100K CA_CAMS AND PRE-PROCESS 
-```{r}
+
 #load regional file
 data <- read.csv('CAMS_CA_100k_v1.csv')  
 data <- as.data.table(data)
-```
 
-```{r}
+
+
 # Define the public holidays in Milan
 milan_holidays <- c(
   "2016-01-01", "2016-01-06", "2016-03-28", "2016-04-25", "2016-06-02", "2016-08-15", "2016-11-01", "2016-12-08", "2016-12-26",
@@ -27,10 +27,8 @@ milan_holidays <- c(
   "2018-01-01", "2018-04-02", "2018-04-25", "2018-05-01", "2018-08-15", "2018-11-01", "2018-12-25", "2018-12-26",
   "2019-01-01", "2019-04-22", "2019-04-25", "2019-05-01", "2019-08-15", "2019-11-01", "2019-12-25", "2019-12-26"
 )
-```
 
 
-```{r}
 # chose data only till 2019 
 data$Date <- as.Date(data$Date)
 data <- data[data$Date <= as.Date("2019-12-31"), ]
@@ -47,11 +45,11 @@ data[, adult := adult + young]
 data$holidays <- as.integer(data$Date %in% as.Date(milan_holidays))
 # define stratum
 data[, stratum:=factor(paste(DISTRICT, year, month, dow, sep=":"))]
-```
+
 
 
 # 2-STAGE MODEL WITH DISTRICT STRATIFICATION AND META-ANALYSIS
-```{r}
+
 # load parameters 
 districts <- unique(data$DISTRICT)
 lags <- 0:7
@@ -172,17 +170,16 @@ saveRDS(results_list, file = "2_step_results_100k.rds")
 # Save all_results_lag to a CSV file
 write.csv(all_results_lag, file = "2_step_results_100k.csv", row.names = FALSE)
 
-```
+
 
 # CHECK HETEROGENEITY STATS 
-```{r}
 summary(results_list$all_CA$PM25$meta_tot)
 summary(results_list$all_CA$PM10$meta_tot)
 summary(results_list$all_CA$NO2$meta_tot)
 summary(results_list$all_CA$O3$meta_tot)
 summary(results_list$all_CA$SO2$meta_tot)
 summary(results_list$all_CA$CO$meta_tot)
-```
+
 
 
 
