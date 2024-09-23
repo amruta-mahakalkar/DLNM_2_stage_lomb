@@ -105,29 +105,48 @@ plot_exposure_lag(results_list, c("all_CA", "urban", "rural"), "CO", c("all_CA" 
 ```
 
 ```{r}
-PM25 <- results_list$all_CA$PM25$results_lag
-PM25_O3 <- results_list$all_CA$PM25_O3$results_lag
-PM25_NO2 <- results_list$all_CA$PM25_NO2$results_lag
-PM25_SO2 <- results_list$all_CA$PM25_SO2$results_lag
-PM25_CO <- results_list$all_CA$PM25_CO$results_lag
-result_bipol <- bind_rows(PM25, PM25_O3, PM25_NO2, PM25_SO2, PM25_CO)
+# Define the pollutants
+pollutants <- c("PM25", "NO2", "O3", "SO2", "CO")
 
-jpeg("graphs/bipol_pm25.jpeg", width = 2500, height = 1500, res = 400, quality = 100)
-
-p <- ggplot(result_bipol, aes(x = lag, y = RR, color = pollutant)) +
+for (pollutant in pollutants) {
+  # Extract the results for the current pollutant and its combinations
+  results <- results_list$all_CA[[pollutant]]$results_lag
+  results_PM25 <- results_list$all_CA[[paste0(pollutant, "_PM25")]]$results_lag
+  results_O3 <- results_list$all_CA[[paste0(pollutant, "_O3")]]$results_lag
+  results_NO2 <- results_list$all_CA[[paste0(pollutant, "_NO2")]]$results_lag
+  results_SO2 <- results_list$all_CA[[paste0(pollutant, "_SO2")]]$results_lag
+  results_CO <- results_list$all_CA[[paste0(pollutant, "_CO")]]$results_lag
+  
+  # Add a column for each dataset indicating the pollutant
+  results$pollutant <- pollutant
+  results_PM25$pollutant <- paste0(pollutant, " + PM25")
+  results_O3$pollutant <- paste0(pollutant, " + O3")
+  results_NO2$pollutant <- paste0(pollutant, " + NO2")
+  results_SO2$pollutant <- paste0(pollutant, " + SO2")
+  results_CO$pollutant <- paste0(pollutant, " + CO")
+  
+  # Combine the results
+  result_bipol <- bind_rows(results, results_PM25, results_O3, results_NO2, results_SO2, results_CO)
+  result_bipol$label <- ifelse(result_bipol$pvalue < 0.05, "*", "")
+  # Construct the file name dynamically
+  file_name <- paste0("graphs/bipol_", pollutant, ".jpeg")
+  # Create the plot
+  
+  p <- ggplot(result_bipol, aes(x = lag, y = RR, color = pollutant)) +
     geom_point(position = position_dodge(width = 0.5), size = 0.85) +
     geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.3, position = position_dodge(width = 0.5)) +
     geom_hline(yintercept = 1, color = "black", linetype = "dotted") +
-    labs(title = "PM2.5 bipol", x = "Lag", y = "RR") +
+    labs(title = paste0(pollutant, " bipol"), x = "Lag", y = "RR") +
     scale_x_continuous(breaks = unique(result_bipol$lag)) +
+    geom_text(aes(label = label, y = ci_high), vjust=0, position = position_dodge(0.5), show.legend = FALSE) +
     theme_minimal() + 
     theme(panel.grid.major.x = element_line(color = "grey90"),
           panel.grid.minor.x = element_blank(),
           panel.grid.major.y = element_line(color = "grey90"),  
-          panel.grid.minor.y = element_line(color = "grey90"))
-
-print(p)
-dev.off()
+          panel.grid.minor.y = element_line(color = "grey90")) +
+    guides(color = guide_legend(title = NULL))
+    ggsave(file_name, plot = p, width = 6.25, height = 3.75, dpi = 400, quality = 100)
+}
 ```
 
 
