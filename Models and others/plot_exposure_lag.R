@@ -6,8 +6,11 @@ plot_exposure_lag <-
   # Merge the results
   df_results <- do.call(rbind, group_results)
   
+  
   # Add a new column to distinguish the groups
   df_results$group <- factor(rep(groups, each = nrow(group_results[[1]])), levels = groups)
+  df_results$pvalue <- as.numeric(df_results$pvalue)
+  df_results$label <- ifelse(df_results$pvalue < 0.05, "*", "")
   
   # Plot the data
   # Open a JPEG device
@@ -24,8 +27,9 @@ plot_exposure_lag <-
     theme(panel.grid.major.x = element_line(color = "grey90", size = 0.2),
           panel.grid.minor.x = element_blank(),
           panel.grid.major.y = element_line(color = "grey90", size = 0.2),  
-          panel.grid.minor.y = element_line(color = "grey90", size = 0.2))
-  
+          panel.grid.minor.y = element_line(color = "grey90", size = 0.2)) + 
+    geom_text(aes(label = label, y = ci_high), vjust=0, position = position_dodge(0.4), show.legend = FALSE)
+    
   print(p)
   # Close the JPEG device
   dev.off()
