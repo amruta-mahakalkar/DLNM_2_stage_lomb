@@ -1,19 +1,4 @@
-# IMPORT LIBRARIES
-
-```{r}
-library(devtools)
-install("C:/Users/ASUS/Documents/dlnm")
-load_all("C:/Users/ASUS/Documents/dlnm")
-library(epiDisplay); library(lubridate) ; library(dplyr); library(tidyr); library(plyr)
-library(splines); library(gnm); library(Epi); library(tsModel); library(meta); library(sf) 
-library(data.table); library(viridis)
-library(mgcv) ; library(corrplot) ; library(mixmeta)
-library(ggplot2) ; library(patchwork)
-```
-
-
 # LOMB CA_CAMS AND PRE-PROCESS 
-```{r}
 #load regional file
 data_lomb <- read.csv('CAMS_CA_lomb_v1.csv') 
 data_lomb <- as.data.table(data_lomb)
@@ -32,21 +17,15 @@ data_lomb$holy <- as.integer(data_lomb$Date %in% as.Date(milan_holidays))
 data_lomb[, adult := adult + young]
 # define stratum
 data_lomb[, stratum:=factor(paste(year, month, dow, sep=":"))]
-```
 
 # CB - CONFOUNDERS 
-```{r}
 # make spline of time to account for long-term exposure 
 spldoy_l <- onebasis(data_lomb$doy, "ns", df=7)
 # spline for temp and RH 
 cb_temp_l <- crossbasis(data_lomb$Temp, lag=14, argvar=list(fun="ns", knots=quantile(data_lomb$Temp, c(0.10,0.75,0.90), na.rm=T), df=3), arglag=list(fun='strata', breaks=1), group = data_lomb$year)
 cb_rh_l <- onebasis(data_lomb$RH, "ns", df=4)
 
-```
-
 # CB - POLLUTANTS AND MODEL 
-```{r}
-
 pollutants <- c("PM25", "PM10", "NO2", "O3", "SO2", "CO")
 inputs <- c("all_CA", "adult", "senior", "male", "female", "urban", "rural")
 
@@ -78,17 +57,17 @@ for (input in inputs) {
       SE <- (log(ci_high) - log(ci_low)) / (2 * 1.96)
       Z <- log(RR) / SE
       pvalue <- 2 * (1 - pnorm(abs(Z)))
-    # Append the results to the data frame
+      # Append the results to the data frame
       l_results <- rbind(l_results, data.frame(
-         input = input,
-         pollutant = pollutant,
-         lag = lag,
-         RR = RR,
-         ci_low = ci_low,
-         ci_high = ci_high,
-         pvalue = pvalue,
-         stringsAsFactors = FALSE
-       ))
+        input = input,
+        pollutant = pollutant,
+        lag = lag,
+        RR = RR,
+        ci_low = ci_low,
+        ci_high = ci_high,
+        pvalue = pvalue,
+        stringsAsFactors = FALSE
+      ))
     }
     models_list <- get(paste0("l_models_", input))
     models_list[[pollutant]] <- model
@@ -99,4 +78,3 @@ for (input in inputs) {
   }
 }
 write.csv(l_results, "RR_results_lombardia.csv", row.names = FALSE)
-```
