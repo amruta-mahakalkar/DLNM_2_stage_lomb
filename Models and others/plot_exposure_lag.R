@@ -28,6 +28,7 @@ plot_exposure_lag <-
           panel.grid.minor.x = element_blank(),
           panel.grid.major.y = element_line(color = "grey90", size = 0.2),  
           panel.grid.minor.y = element_line(color = "grey90", size = 0.2)) + 
+    guides(color = guide_legend(title = NULL))
     geom_text(aes(label = label, y = ci_high), vjust=0, position = position_dodge(0.4), show.legend = FALSE)
     
   print(p)
