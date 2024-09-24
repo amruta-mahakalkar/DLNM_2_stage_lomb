@@ -27,5 +27,6 @@ Geolocalised points of telephone calls to the regional emergency medical service
    * Main model
    * Model modification by age-sex
    * Model stratification by urban-rural
+   * Model stratification by seasons
    * Bi-pollutant model
    * Codes for plotting 
