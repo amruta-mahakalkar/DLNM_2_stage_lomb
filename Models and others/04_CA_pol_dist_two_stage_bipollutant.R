@@ -1,3 +1,5 @@
+# BI-POLLUTANT META-ANALYSIS (PM2.5)
+# Define parameters 
 districts <- unique(data$DISTRICT)
 lags <- 0:7
 argvar <- list(fun = "lin")

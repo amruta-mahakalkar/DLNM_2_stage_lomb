@@ -1,5 +1,5 @@
 # URBAN - RURAL 2-STAGE MODEL
-
+# Define parameters 
 districts <- unique(data$DISTRICT)
 lags <- 0:7
 argvar <- list(fun = "lin")
