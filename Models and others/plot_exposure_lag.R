@@ -23,12 +23,12 @@ plot_exposure_lag <-
     labs(title = paste("Exposure-lag to", pollutant, "by", group_name), x = "Lag", y = "RR", color = "Group") +
     scale_x_continuous(breaks = unique(df_results$lag)) +
     scale_color_manual(values = colors) +
-    theme_minimal() + 
+    theme_minimal() +    
     theme(panel.grid.major.x = element_line(color = "grey90", size = 0.2),
           panel.grid.minor.x = element_blank(),
           panel.grid.major.y = element_line(color = "grey90", size = 0.2),  
           panel.grid.minor.y = element_line(color = "grey90", size = 0.2)) + 
-    guides(color = guide_legend(title = NULL))
+    guides(color = guide_legend(title = NULL)) +
     geom_text(aes(label = label, y = ci_high), vjust=0, position = position_dodge(0.4), show.legend = FALSE)
     
   print(p)
