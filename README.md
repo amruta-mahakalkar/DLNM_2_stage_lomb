@@ -21,11 +21,12 @@ Geolocalised points of telephone calls to the regional emergency medical service
 ## Files information
 1. Data : contains aggregated district-wise data of daily air pollution concentration, temperature, relative humidity, OHCA events, date and case-crossover spectrum 
 2. Graphs and maps : outputs as district-wise relative risk maps, regional exposure-response curves and regional lag-response graphs
-3. Results: excel consisting relative risk (ci:95%) (for entire region) for overall model, stratified by urban-rural, modified by age and sex and bi-pollutant. 
+3. Results: excel consisting relative risk (ci:95%) (for entire region) for overall model, stratified by urban-rural and seasons, modified by age and sex and bi-pollutant. 
 4. Parametres_selection.Rmd : Selections of model parameters such as degrees of freedom, lag and spline function of temperature, relative humidity and pollutants.
 5. Models and other: contains R codes for 
    * Main model
    * Model modification by age-sex
    * Model stratification by urban-rural
+   * Model stratification by seasons
    * Bi-pollutant model
    * Codes for plotting 
