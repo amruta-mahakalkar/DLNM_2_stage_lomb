@@ -1,11 +1,11 @@
-# CORRELATION ANALYSIS
+## CORRELATION ANALYSIS
 # Calculate the correlation table
 correlation_table <- cor(data[, .(PM25, PM10, NO2, O3, SO2, CO, Temp, RH, all_CA)], method = "spearman")
 
 # Print the correlation table
 corrplot(correlation_table, type = 'lower', method = 'square', tl.col = "black", tl.srt = 90, diag = FALSE, tl.cex=0.7, cl.cex = 0.7, col = rev(corrplot::COL2('RdBu')))
 
-# EXPOSURE-LAG-RESPONSE GRAPHS
+## EXPOSURE-LAG-RESPONSE GRAPHS
 # MERGE ALL RESULTS
 #load results_list
 results_base <- readRDS("2_step_results_100k.rds")
@@ -42,7 +42,7 @@ results_lag_df <- extract_results_lag(results_list)
 write.csv(results_lag_df, file = "2_step_all_results_100k.csv", row.names = FALSE)
 
 
-# PLOT EXP-LAG GRAPHS 
+## PLOT EXP-LAG GRAPHS 
 for (pollutant in pollutants) {
   file_name <- paste0("graphs/", pollutant, "_age_sex.jpeg")
   plot_exposure_lag(
@@ -77,7 +77,7 @@ for (pollutant in pollutants) {
     file_name)
 }
 
-# PLOT EXP-RES GRAPHS
+## PLOT EXP-RES GRAPHS
 # plot urban-rural exp-res curve
 pollutants <- c("PM25", "PM10", "NO2", "O3", "SO2", "CO")
 colors <- c("black","tomato3", "green4")
@@ -115,29 +115,32 @@ for (pollutant in pollutants) {
   plot_exposure_response(results_list, pollutant, groups, colors, ylim[[pollutant]], file_name)
 }
 
-# PLOT BI-POLLUTANTS LAG-RESPONSE GRAPHS 
+## PLOT BI-POLLUTANTS LAG-RESPONSE GRAPHS 
 # Define the pollutants
 pollutants <- c("PM25", "NO2", "O3", "SO2", "CO")
 
 for (pollutant in pollutants) {
   # Extract the results for the current pollutant and its combinations
   results <- results_list$all_CA[[pollutant]]$results_lag
-  results_PM25 <- results_list$all_CA[[paste0(pollutant, "_PM25")]]$results_lag
-  results_O3 <- results_list$all_CA[[paste0(pollutant, "_O3")]]$results_lag
-  results_NO2 <- results_list$all_CA[[paste0(pollutant, "_NO2")]]$results_lag
-  results_SO2 <- results_list$all_CA[[paste0(pollutant, "_SO2")]]$results_lag
-  results_CO <- results_list$all_CA[[paste0(pollutant, "_CO")]]$results_lag
+  
+  # Initialize an empty list to store results
+  combined_results <- list()
+  
+  # Make paired pollutant names while excluding the pollutant in loop
+  for (pol in pollutants) {
+    if (pollutant != pol) {
+      comb_results <- results_list$all_CA[[paste0(pollutant, "_", pol)]]$results_lag
+      comb_results$pollutant <- paste0(pollutant, " + ", pol)
+      combined_results <- append(combined_results, list(comb_results))
+    }
+  }
   
   # Add a column for each dataset indicating the pollutant
   results$pollutant <- pollutant
-  results_PM25$pollutant <- paste0(pollutant, " + PM25")
-  results_O3$pollutant <- paste0(pollutant, " + O3")
-  results_NO2$pollutant <- paste0(pollutant, " + NO2")
-  results_SO2$pollutant <- paste0(pollutant, " + SO2")
-  results_CO$pollutant <- paste0(pollutant, " + CO")
+  combined_results <- append(combined_results, list(results))
   
   # Combine the results
-  result_bipol <- bind_rows(results, results_PM25, results_O3, results_NO2, results_SO2, results_CO)
+  result_bipol <- bind_rows(combined_results)
   result_bipol$label <- ifelse(result_bipol$pvalue < 0.05, "*", "")
   # Construct the file name dynamically
   file_name <- paste0("graphs/bipol_", pollutant, ".jpeg")
@@ -157,4 +160,58 @@ for (pollutant in pollutants) {
           panel.grid.minor.y = element_line(color = "grey90")) +
     guides(color = guide_legend(title = NULL))
   ggsave(file_name, plot = p, width = 6.25, height = 3.75, dpi = 400, quality = 100)
+}
+
+## PLOT REGIONAL NON-SPATIAL LAG-RESPONSE GRAPHS 
+group = c("all_CA", "male", "female", "adult", "senior")
+colors = c("all_CA" = "black", "male" = "deepskyblue", "female" = "purple3", "adult" = "darkolivegreen3", "senior" = "orange")
+pollutants <- c("PM25", "PM10", "NO2", "O3", "SO2", "CO")
+for (pollutant in pollutants) {
+  filtered_results <- l_results[l_results$input %in% group & l_results$pollutant %in% pollutant, ]
+  filtered_results$group <- factor(filtered_results$input, levels = group)
+  filtered_results$pvalue <- as.numeric(filtered_results$pvalue)
+  filtered_results$label <- ifelse(filtered_results$pvalue < 0.05, "*", "")
+  p <- ggplot(filtered_results, aes(x = lag, y = RR, color = group)) +
+    geom_point(position = position_dodge(width = 0.4), size = 1) +
+    geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.3, position = position_dodge(width = 0.4)) +
+    geom_hline(yintercept = 1, color = "black", linetype = "dotted") +
+    geom_text(aes(label = label, y = ci_high), vjust=0, position = position_dodge(0.4), show.legend = FALSE) +
+    labs(title = paste("Exposure-lag to", pollutant, "by age-sex (regional model)"), x = "Lag", y = "RR", color = "Group") +
+    scale_x_continuous(breaks = unique(filtered_results$lag)) +
+    scale_color_manual(values = colors) +
+    theme_minimal() + 
+    theme(panel.grid.major.x = element_line(color = "grey90", size = 0.2),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.major.y = element_line(color = "grey90", size = 0.2),  
+          panel.grid.minor.y = element_line(color = "grey90", size = 0.2)) +
+    guides(color = guide_legend(title = NULL))
+  jpeg(filename = paste0("graphs/lomb_", pollutant, "_age_sex.jpeg"), width = 2500, height = 1500, res = 400, quality = 100)
+  print(p)
+  dev.off()
+}
+
+group = c("all_CA", "urban", "rural")
+colors = c("all_CA" = "black", "urban" = "salmon2", "rural" = "darkolivegreen3")
+for (pollutant in pollutants) {
+  filtered_results <- l_results[l_results$input %in% group & l_results$pollutant %in% pollutant, ]
+  filtered_results$group <- factor(filtered_results$input, levels = group)
+  filtered_results$pvalue <- as.numeric(filtered_results$pvalue)
+  filtered_results$label <- ifelse(filtered_results$pvalue < 0.05, "*", "")
+  p <- ggplot(filtered_results, aes(x = lag, y = RR, color = group)) +
+    geom_point(position = position_dodge(width = 0.4), linewidth = 1) +
+    geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.3, position = position_dodge(width = 0.4)) +
+    geom_hline(yintercept = 1, color = "black", linetype = "dotted") +
+    geom_text(aes(label = label, y = ci_high), vjust=0, position = position_dodge(0.4), show.legend = FALSE) +
+    labs(title = paste("Exposure-lag to", pollutant, "by location (regional model)"), x = "Lag", y = "RR", color = "Group") +
+    scale_x_continuous(breaks = unique(filtered_results$lag)) +
+    scale_color_manual(values = colors) +
+    theme_minimal() + 
+    theme(panel.grid.major.x = element_line(color = "grey90", size = 0.2),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.major.y = element_line(color = "grey90", size = 0.2),  
+          panel.grid.minor.y = element_line(color = "grey90", size = 0.2)) +
+    guides(color = guide_legend(title = NULL))
+  jpeg(filename = paste0("graphs/lomb_", pollutant, "_urban_rural.jpeg"), width = 2500, height = 1500, res = 400, quality = 100)
+  print(p)
+  dev.off()
 }

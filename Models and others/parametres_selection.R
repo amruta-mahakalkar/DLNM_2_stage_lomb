@@ -1,24 +1,17 @@
-#PARAMETRE SELECTION
-```{r}
+# PARAMETRES SELECTION
 # Import libraries 
-install.packages("devtools")
-library(devtools)
-install("C:/Users/ASUS/Documents/dlnm")
-load_all("C:/Users/ASUS/Documents/dlnm")
-library(epiDisplay); library(lubridate) ; library(dplyr); library(tidyr); library(metafor); library(plyr)
-library(splines); library(gnm); library(Epi); library(tsModel); library(meta); library(sf)
-library(data.table)
+library(dlnm)
+library(epiDisplay); library(lubridate) ; library(dplyr); library(tidyr); library(plyr); library(scales)
+library(splines); library(gnm); library(Epi); library(tsModel);  library(sf) 
+library(data.table); library(viridis)
+library(mgcv) ; library(corrplot); library(mixmeta)
 library(ggplot2) ; library(patchwork)
-```
 
-```{r}
 #load 100k dist file
 data_dist <- read.csv('CAMS_CA_100k_v1.csv')
 data_dist <- as.data.table(data_dist)
-```
 
 # DATA PRE-PROCESSING
-```{r}
 # chose data only till 2019 
 data_dist$Date <- as.Date(data_dist$Date)
 data_dist <- data_dist[data_dist$Date <= as.Date("2019-12-31"), ]
@@ -35,20 +28,16 @@ data_dist[, adult := adult + young]
 data_dist$holidays <- as.integer(data_dist$Date %in% as.Date(milan_holidays))
 # define stratum
 data_dist[, stratum:=factor(paste(DISTRICT, year, month, dow, sep=":"))]
-```
 
 # MAKE QAIC FUNCTION
-```{r}
 fqaic_single <- function(model) {
   loglik <- sum(dpois(model$y,model$fitted.values,log=TRUE))
   phi <- summary(model)$dispersion
   qaic <- -2*loglik + 2*summary(model)$df[3]*phi
   return(qaic)
 }
-```
 
-# PARAMETER SELECTION FOR TIME CURVE 
-```{r}
+## PARAMETER SELECTION FOR TIME CURVE 
 # Define the functions and degrees of freedom
 fun <- c("ns") 
 df <- 3:10
@@ -67,7 +56,7 @@ for (input in inputs) {
       
       # make the basis function
       spldoy <- onebasis(data_dist$doy, fun = f, df = d)
-  
+      
       model <- gnm(as.formula(paste(input, "~ spldoy")), eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
       
       # get their Q-AIC
@@ -80,12 +69,11 @@ for (input in inputs) {
     }
   }
 }
+
 write.csv(spydoy_qaic, "spydoy_qaic.csv", row.names =TRUE)
-```
 
 
-# QAIC for argvar (fun, df) for temperature and RH
-```{r}
+## QAIC for argvar (fun, df) for temperature and RH
 # Define the parameters
 knots_argvar <- list(c(10, 90)/100, c(25, 75)/100, c(10, 75, 90)/100, c(25, 75, 90)/100, c(33.33, 66.67)/100)
 lags_temp <- c(0,14)
@@ -100,48 +88,45 @@ for (var in vars) {
   
   # try linear argvar
   cb_lin <- onebasis(data_dist[[var]], fun = "lin")
-    
+  
   # Fit the linear model
   model_lin <- gnm(all_CA ~ cb_lin, eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
-    
+  
   # Calculate the Q-AIC for the linear model
   fqaic_lin <- fqaic_single(model_lin)
   argvar_dfs_qaic[[var]][[paste0("qaic_", "lin")]] <- fqaic_lin 
-    
+  
   # try non-linear argvar with dfs 
-    for (df_var in df_arg) {
-      cb_df <- onebasis(data_dist[[var]], fun = "ns", df = df_var)
+  for (df_var in df_arg) {
+    cb_df <- onebasis(data_dist[[var]], fun = "ns", df = df_var)
+    
+    # Fit the model for the current df
+    model_df <- gnm(all_CA ~ cb_df, eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
+    
+    fqaic_df <- fqaic_single(model_df)
+    
+    # Store the Q-AIC value for the current df model
+    argvar_dfs_qaic[[var]][[paste0("qaic_", "ns", df_var)]] <- fqaic_df
+  }
+  # try non-linear argvar with dfs + specific knots 
+  for (df_var in df_arg) {      
+    for (knot in knots_argvar) {
+      cb_knot <- onebasis(data_dist[[var]], fun = "ns", knots=quantile(data_dist[[var]], knot, na.rm=T), df = df_var)
       
-      # Fit the model for the current df
-      model_df <- gnm(all_CA ~ cb_df, eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
-      
-      fqaic_df <- fqaic_single(model_df)
-      
-      # Store the Q-AIC value for the current df model
-      argvar_dfs_qaic[[var]][[paste0("qaic_", "ns", df_var)]] <- fqaic_df
-    }
-    # try non-linear argvar with dfs + specific knots 
-    for (df_var in df_arg) {      
-      for (knot in knots_argvar) {
-        cb_knot <- onebasis(data_dist[[var]], fun = "ns", knots=quantile(data_dist[[var]], knot, na.rm=T), df = df_var)
-          
-        model_knot <- gnm(all_CA ~ cb_knot, eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)  
-        # Calculate the Q-AIC
-        fqaic_knots <- fqaic_single(model_knot)
-        # Store the Q-AIC values in a list
-        argvar_dfs_qaic[[var]][[paste0("qaic_", "ns_", df_var, "_knots_", paste(knot, collapse = "_"))]] <- fqaic_knots
+      model_knot <- gnm(all_CA ~ cb_knot, eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)  
+      # Calculate the Q-AIC
+      fqaic_knots <- fqaic_single(model_knot)
+      # Store the Q-AIC values in a list
+      argvar_dfs_qaic[[var]][[paste0("qaic_", "ns_", df_var, "_knots_", paste(knot, collapse = "_"))]] <- fqaic_knots
     }
   }
 }
 
-```
-
-# QAIC for arglag (fun, df) per pollutant
-```{r}
+## QAIC for arglag (fun, df) per pollutant
 # Define the parameters
 fun_arglag <- c("ns", "bs", "strata")
 df_arglag <- 3:6
-vars <- c("PM25", "PM10", "NO2", "O3", "SO2", "CO", "Temp", "RH")
+vars <- c("PM25", "PM10", "NO2", "O3", "SO2", "CO")
 # make storage
 arglag_dfs_qaic <- list()
 for (var in vars) {
@@ -149,20 +134,20 @@ for (var in vars) {
   arglag_dfs_qaic[[var]] <- list()
   # try linear varlag
   cb_lin <- crossbasis(data_dist[[var]], lag = 7, argvar = list(fun = "ns", df = 3), arglag = list(fun = "lin"))
-    
+  
   # Fit the linear model
   model_lin <- gnm(all_CA ~ cb_lin, eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
-    
+  
   # Calculate the Q-AIC for the linear model
   fqaic_lin <- fqaic_single(model_lin)
   arglag_dfs_qaic[[var]][[paste0("qaic_", "lin")]] <- fqaic_lin 
   
   # try strata varlag
   cb_stra <- crossbasis(data_dist[[var]], lag = 7, argvar = list(fun = "ns", df = 3), arglag = list(fun = "strata", breaks=1))
-    
+  
   # Fit the strata model
   model_stra <- gnm(all_CA ~ cb_stra, eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
-    
+  
   # Calculate the Q-AIC for the strata
   fqaic_stra <- fqaic_single(model_stra)
   arglag_dfs_qaic[[var]][[paste0("qaic_", "stra")]] <- fqaic_stra
@@ -172,20 +157,21 @@ for (var in vars) {
     for (df_lag in df_arglag) {
       cb_df <- crossbasis(data_dist[[var]], lag = 7, argvar = list(fun = "ns", df = 3),arglag = list(fun = fun_lag, df = df_lag))
       
-    # Fit the model for the current df
-    model_df <- gnm(all_CA ~ cb_df, eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
+      # Fit the model for the current df
+      model_df <- gnm(all_CA ~ cb_df, eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
       
-    fqaic_df <- fqaic_single(model_df)
+      fqaic_df <- fqaic_single(model_df)
       
-    # store qaic
-    arglag_dfs_qaic[[var]][[paste0("qaic_", fun_lag, df_lag)]] <- fqaic_df
+      # store qaic
+      arglag_dfs_qaic[[var]][[paste0("qaic_", fun_lag, df_lag)]] <- fqaic_df
     }
   }
 }
-```
+unlisted_arglag <- unlist(var_lag_qaic)
+write.csv(unlisted_arglag, "arglag_pol.csv", row.names = TRUE)
 
-# QAIC for arglag for temp 
-```{r}
+
+## QAIC for arglag for temp
 vars <- c("Temp")
 lags <- 1:14
 knot_var <- list("Temp" = c(0.10, 0.75, 0.90)) 
@@ -207,7 +193,7 @@ for (var in vars) {
         cb_lag_break <- crossbasis(data_dist[[var]], lag = lag, argvar = argvar, arglag = list(fun = "strata", breaks = 1))
         # trying other combinations
         cb_lag_knots <- crossbasis(data_dist[[var]], lag = lag, argvar = argvar, arglag = list(knots=logknots(lag, fun = f, k)))
-    
+        
         # Fit the linear model for cb_lag_break
         model_lag_break <- gnm(all_CA ~ cb_lag_break + spldoy:factor(year) + factor(dow), eliminate = stratum, data = data_dist, family = quasipoisson, subset = keep)
         fqaic_lag_break <- fqaic_single(model_lag_break)
@@ -221,85 +207,5 @@ for (var in vars) {
     }
   }
 }
-
-```
-
-```{r}
 unlisted_arglag <- unlist(var_lag_qaic)
-write.csv(unlisted_arglag, "arglag_v2.csv", row.names = TRUE)
-```
-
-
-# Save argvar (for temp and rh), arglag for temp and pollutants
-```{r}
-# Unlist the lists
-unlisted_arglag <- unlist(arglag_dfs_qaic)
-unlisted_argvar <- unlist(argvar_dfs_qaic)
-unlisted_varlag <- unlist(var_lag_qaic)
-
-# Extract pollutant names from the first level of the lists
-arg_lag <- sapply(strsplit(names(unlisted_arglag), "\\."), `[`, 1)
-arg_var <- sapply(strsplit(names(unlisted_argvar), "\\."), `[`, 1)
-var_lag <- sapply(strsplit(names(unlisted_varlag), "\\."), `[`, 1)
-
-# Create data frames from the unlisted lists
-df_lag <- data.frame(
-  Variable = arg_lag,
-  QAIC_Lag = unlisted_arglag,
-  Row_Lag = names(unlisted_arglag),
-  stringsAsFactors = FALSE
-)
-
-df_var <- data.frame(
-  Variable = arg_var,
-  QAIC_Var = unlisted_argvar,
-  Row_Var = names(unlisted_argvar),
-  stringsAsFactors = FALSE
-)
-
-cb_lag <- data.frame(
-  Variable = var_lag,
-  QAIC_cb_lag = unlisted_varlag,
-  Row_cb_lag = names(unlisted_varlag),
-  stringsAsFactors = FALSE
-)
-
-# Find the indices of the minimum QAIC_Lag for each Variable
-min_lag <- aggregate(Row_Lag ~ Variable, data = df_lag, FUN = function(x) x[which.min(df_lag$QAIC_Lag[df_lag$Row_Lag %in% x])])
-
-# Find the minimum QAIC_Var for each Variable
-min_var <- aggregate(Row_Var ~ Variable, data = df_var, FUN = function(x) x[which.min(df_var$QAIC_Var[df_var$Row_Var %in% x])])
-
-# Find the minimum QAIC_cb_lag for each Variable
-min_varlag <- aggregate(Row_cb_lag ~ Variable, data = cb_lag, FUN = function(x) x[which.min(cb_lag$QAIC_cb_lag[cb_lag$Row_cb_lag %in% x])])
-
-# Merge the results by Variable
-merged_min_qaic <- Reduce(function(x, y) merge(x, y, by = "Variable", all = TRUE), list(min_lag, min_var, min_varlag))
-
-
-# Merge the data frames by Variable
-merged_df <- Reduce(function(x, y) merge(x, y, by = "Variable", all = TRUE), list(
-  data.frame(
-    Variable = names(unlisted_argvar),
-    QAIC_Var = unlisted_argvar,
-    stringsAsFactors = FALSE
-  ),
-  data.frame(
-    Variable = names(unlisted_arglag),
-    QAIC_Lag = unlisted_arglag,
-    stringsAsFactors = FALSE
-  ),
-  data.frame(
-    Variable = names(unlisted_varlag),
-    QAIC_cb_lag = unlisted_varlag,
-    stringsAsFactors = FALSE
-  )
-))
-
-# Write the merged data frame to a CSV file
-write.csv(merged_df, "argvar_arglag_qaic.csv", row.names =FALSE)
-write.csv(merged_min_qaic, "argvar_arglag_qaic_smallest.csv", row.names = FALSE)
-```
-
-
-
+write.csv(unlisted_arglag, "arglag_temp.csv", row.names = TRUE)
