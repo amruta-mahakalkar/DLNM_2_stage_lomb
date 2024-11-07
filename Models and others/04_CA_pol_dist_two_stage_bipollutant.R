@@ -21,29 +21,12 @@ for (pollutant in pollutants) {
     # adjusting for confounders 
     cb_temp <- crossbasis(data_sub$Temp, lag=14, argvar=list(fun="ns", knots=quantile(data_sub$Temp, c(0.10,0.75,0.90), na.rm=T), df=3), arglag=list(fun='strata', breaks=1) , group = data_sub$year) 
     cb_rh <- onebasis(data_sub$RH, "ns", df=4)
-    # crossbasis for exposure and lag - response model 
-    cb_PM25_var <- crossbasis(data_sub$PM25, lag = 4, argvar = argvar, arglag = arglag, group = data_sub$year)
-    
+    # crossbasis for lag - response model 
     cb_PM25_lag <- crossbasis(data_sub$PM25, lag = 7, argvar = argvar, arglag = arglag, group = data_sub$year)
-    
-    cb_pol_var <- crossbasis(data_sub[[pollutant]], lag = 4, argvar = argvar, arglag = arglag, group = data_sub$year)
-    
     cb_pol_lag <- crossbasis(data_sub[[pollutant]], lag = 7, argvar = argvar, arglag = arglag, group = data_sub$year)
-    #cb_pol <- runMean(data_sub[[pollutant]], 0:7)
     
-    # run exposure and lag - response models
-    model_var <- gnm(all_CA ~ cb_PM25_var + cb_pol_var + spldoy:factor(year) + cb_temp + cb_rh + factor(dow) + factor(holidays), eliminate = stratum, data = data_sub, family = quasipoisson, subset = keep)
-    
+    # run lag - response models
     model_lag <- gnm(all_CA ~ cb_PM25_lag + cb_pol_lag + spldoy:factor(year) + cb_temp + cb_rh + factor(dow) + factor(holidays), eliminate = stratum, data = data_sub, family = quasipoisson, subset = keep)
-    
-    # record overall estimates
-    coef_vcov_list[[dist]] <- list()
-    df_pol <- 3
-    ind <- seq(df_pol)
-    coefall <- coef(model_var)[ind]  
-    vcovall <- vcov(model_var)[ind,ind] 
-    coef_vcov_list[[dist]]$coefall <- coefall
-    coef_vcov_list[[dist]]$vcovall <- vcovall
     
     # record lag-wise estimates 
     # crossreduce model by lag 
@@ -58,20 +41,6 @@ for (pollutant in pollutants) {
   }
   # attach district numbers to the dataframe
   names(coef_vcov_list) <- districts
-  # filter coefs and vcovs for overall meta-analysis
-  coefall <- do.call(rbind, lapply(coef_vcov_list, function(x) x$coefall))
-  vcovall <- lapply(coef_vcov_list, function(x) x$vcovall)
-  
-  # Run overall meta-analysis 
-  meta_tot <- mixmeta(coefall, vcovall, method="ml", random=~1|names(coef_vcov_list), control=list(igls.inititer=10))
-  
-  # Predict coef and vcov from overall meta-analysis
-  max_pol <- ceiling(max(data$PM25, na.rm = TRUE) / 5) * 5
-  meta_pred_tot <- crosspred(do.call(onebasis, c(list(x=0:max_pol), list(fun="ns", df=3))), coef=coef(meta_tot), vcov=vcov(meta_tot), cen=0, model.link="log")
-  
-  # Store overall meta-analysis results in a list
-  results_list[[paste0("all_CA")]][[paste0("PM25_", pollutant)]]$meta_tot <- meta_tot
-  results_list[[paste0("all_CA")]][[paste0("PM25_", pollutant)]]$meta_pred_tot <- meta_pred_tot
   
   # Run lag-wise meta-analysis 
   coeflag <- do.call(rbind, lapply(coef_vcov_list, function(x) x$coeflag))
