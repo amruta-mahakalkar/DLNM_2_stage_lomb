@@ -72,8 +72,9 @@ for (input in inputs) {
       # adjusting for confounders 
       cb_temp <- crossbasis(data_sub$Temp, lag=14, argvar=list(fun="ns", knots=quantile(data_sub$Temp, c(0.10,0.75,0.90), na.rm=T), df=3), arglag=list(fun='strata', breaks=1) , group = data_sub$year) 
       cb_rh <- onebasis(data_sub$RH, "ns", df=4)
-      # crossbasis for exposure and lag - response model 
-      cb_pol_var <- crossbasis(data_sub[[pollutant]], lag = 4, argvar = argvar, arglag = arglag, group = data_sub$year) 
+      # onebasis for exposure - response model 
+      cb_pol_var <- onebasis(runMean(data_sub[[pollutant]],0:3), "ns", df=3)
+      # crossbasis for lag - response model 
       cb_pol_lag <- crossbasis(data_sub[[pollutant]], lag = 7, argvar = argvar, arglag = arglag, group = data_sub$year)
       
       # run exposure and lag - response models 
