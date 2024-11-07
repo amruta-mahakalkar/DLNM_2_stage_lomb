@@ -167,7 +167,7 @@ for (var in vars) {
     }
   }
 }
-unlisted_arglag <- unlist(var_lag_qaic)
+unlisted_arglag <- unlist(arglag_dfs_qaic)
 write.csv(unlisted_arglag, "arglag_pol.csv", row.names = TRUE)
 
 
