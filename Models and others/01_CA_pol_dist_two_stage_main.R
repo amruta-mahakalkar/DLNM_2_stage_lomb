@@ -1,10 +1,7 @@
 # IMPORT LIBRARIES
-library(devtools)
-install("C:/Users/ASUS/Documents/dlnm")
-load_all("C:/Users/ASUS/Documents/dlnm")
 library(epiDisplay); library(lubridate) ; library(dplyr); library(tidyr); library(plyr)
 library(splines); library(gnm); library(Epi); library(tsModel); library(meta); library(sf) 
-library(data.table); library(viridis)
+library(data.table); library(viridis); library(dlnm)
 library(mgcv) ; library(corrplot) ; library(mixmeta)
 library(ggplot2) ; library(patchwork)
 
@@ -77,15 +74,16 @@ for (input in inputs) {
       # crossbasis for lag - response model 
       cb_pol_lag <- crossbasis(data_sub[[pollutant]], lag = 7, argvar = argvar, arglag = arglag, group = data_sub$year)
       
-      # run exposure and lag - response models 
-      if (input == "adult") {
-        model_var <- gnm(as.formula(paste(input, "~ cb_pol_var + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)")), eliminate=stratum, data=data_sub, family=quasipoisson, subset=keep)
-        model_lag <- gnm(as.formula(paste(input, "~ cb_pol_lag + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)")), eliminate=stratum, data=data_sub, family=quasipoisson, subset=keep)
-      } else {
-        model_var <- gnm(as.formula(paste(input, "~ cb_pol_var + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)+ factor(holidays)")), eliminate = stratum, data = data_sub, family = quasipoisson, subset=keep) 
-        model_lag <- gnm(as.formula(paste(input, "~ cb_pol_lag + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)+ factor(holidays)")), eliminate = stratum, data = data_sub, family = quasipoisson, subset=keep)
-      }
+      # count holidays with keep is TRUE and keep factor(holidays) only when it is >1
+      add_holidays <- ifelse(data_sub[keep == TRUE & holidays == 1, .N] > 1, "+ factor(holidays)", "")
       
+      # run exposure and lag - response models
+      model_var <- gnm(as.formula(paste(input, "~ cb_pol_var + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)", add_holidays)), 
+      eliminate = stratum, data = data_sub, family = quasipoisson, subset = keep)
+      
+      model_lag <- gnm(as.formula(paste(input, "~ cb_pol_lag + spldoy:factor(year) + cb_temp + cb_rh + factor(dow)", add_holidays)), 
+      eliminate = stratum, data = data_sub, family = quasipoisson, subset = keep)
+     
       # record overall estimates
       coef_vcov_list[[dist]] <- list()
       df_pol <- 3
@@ -171,9 +169,3 @@ summary(results_list$all_CA$NO2$meta_tot)
 summary(results_list$all_CA$O3$meta_tot)
 summary(results_list$all_CA$SO2$meta_tot)
 summary(results_list$all_CA$CO$meta_tot)
-
-
-
-
-
-

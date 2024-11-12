@@ -32,6 +32,8 @@ for (pollutant in pollutants) {
     # crossreduce model by lag 
     mod_pred_red <- crossreduce(cb_PM25_lag, model_lag, type="var", value = 10, cen=0) 
     
+    # make store for coef and vcov
+    coef_vcov_list[[dist]] <- list()
     # extract estimates
     coeflag <- coef(mod_pred_red)
     vcovlag <- vcov(mod_pred_red)
