@@ -33,7 +33,8 @@ Geolocalised points of telephone calls to the regional emergency medical service
 1. Graphs and maps : outputs as district-wise relative risk maps, regional exposure-response curves and regional lag-response graphs
 2. Models and other: contains R codes for
 
-   * Sensitivity analysis
+   * Data preparation
+   * Sensitivity analysis for parameter selection
    * Main model
    * Model stratification by age-sex
    * Model stratification by urban-rural
