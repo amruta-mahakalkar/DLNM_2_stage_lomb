@@ -7,7 +7,7 @@ library(mgcv) ; library(corrplot); library(mixmeta) ; library(metafor)
 library(ggplot2) ; library(patchwork); library(gridExtra)
 
 # Load file with health and exposure time series data 
-data <- read.csv('dist_level_data.csv') 
+data <- read.csv('file path') 
 data <- as.data.table(data)
 
 # Define the public holidays in Milan # holidays on weekends removed https://www.timeanddate.com/holidays/italy/2019?hol=1 
