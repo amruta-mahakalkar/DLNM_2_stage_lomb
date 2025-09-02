@@ -82,12 +82,6 @@ for (pol in pollutants) {
   
   for (i in seq_len(nrow(param_grid))) {
     params <- param_grid[i, ]
-    print(paste0("Running model ", i, " of ", nrow(param_grid), 
-                 " for pollutant: ", pol, 
-                 " | pol_fun: ", params$pol_fun, 
-                 " | pol_df: ", params$pol_df, 
-                 " | pol_lag: ", params$pol_lag, 
-                 " | pol_lag_fun: ", params$pol_lag_fun))
     res <- tryCatch({
       data_sub[, keep := sum(all_CA) > 0, by = stratum]
       
